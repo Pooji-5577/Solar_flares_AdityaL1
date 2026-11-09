@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar Flares PBL · Nowcast and forecast dashboard</title>
+<style>
+@font-face{font-family:"IBM Plex Sans";font-weight:300;src:url(/static/fonts/ibm-plex-sans-latin-300-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-weight:400;src:url(/static/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-weight:500;src:url(/static/fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-weight:600;src:url(/static/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:400;src:url(/static/fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:500;src:url(/static/fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2")}
+:root{
+  /* AdityaNet design tokens (web/tokens/color.json) */
+  --canvas:#0A0C0E;--surface:#121518;--raised:#1A1E22;--sunken:#06080A;
+  --fg:#E8EBED;--muted:#A0A8AF;--subtle:#6B747C;--line-subtle:#1E2328;--line:#2A3138;--line-strong:#3D454D;
+  --accent:#4A9EFF;--accent-hover:#6BB1FF;--eyebrow:#93a7c9;--pass:#3FB950;--open:#D29922;--fail:#F85149;
+  --orange:#E69F00;--sky:#56B4E9;--green:#009E73;--vermil:#D55E00;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,"SF Mono",monospace;
+  --ease:cubic-bezier(.22,1,.36,1);--header-h:4rem;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:5rem;scroll-behavior:smooth}
+body{margin:0;background:var(--canvas);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.55;text-rendering:optimizeLegibility}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(rgba(10,12,14,.84),rgba(10,12,14,.9)),url(/static/img/space-galaxies-poster.jpg) center/cover}
+a{color:var(--accent)}
+.wrap{max-width:1160px;margin:0 auto;padding:0 clamp(20px,4vw,48px)}
+/* header */
+.site-header{position:sticky;top:0;z-index:20;height:var(--header-h);background:rgba(10,12,14,.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--line-subtle)}
+.site-header .wrap{height:100%;display:flex;align-items:center;gap:36px}
+.wordmark{font-weight:600;font-size:17px;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
+.wordmark span{color:var(--subtle);font-weight:400}
+nav{display:flex;gap:26px}
+nav a{color:var(--muted);text-decoration:none;font-size:14px;padding:6px 0;border-bottom:1px solid transparent;transition:color .2s var(--ease)}
+nav a:hover{color:var(--fg)}nav a.on{color:var(--fg);border-bottom-color:var(--fg)}
+.tag{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--subtle)}
+/* type */
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--eyebrow)}
+.display-1{font-weight:300;font-size:clamp(2.4rem,5.6vw,4.2rem);letter-spacing:-.03em;line-height:1.05;margin:18px 0 0;text-shadow:0 2px 26px rgba(0,0,0,.5);text-wrap:balance}
+.display-2{font-weight:300;font-size:clamp(1.6rem,3.2vw,2.4rem);letter-spacing:-.022em;line-height:1.12;margin:12px 0 0;text-wrap:balance}
+.lede{font-weight:300;font-size:clamp(1rem,1.5vw,1.2rem);line-height:1.7;color:var(--muted);max-width:60ch;margin:22px 0 0;text-shadow:0 1px 14px rgba(0,0,0,.55)}
+.mono{font-family:var(--mono)}
+/* hero */
+.hero{position:relative;min-height:min(78vh,700px);display:flex;align-items:center;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:url(/static/img/sun-ambient-304-poster.jpg) right -6% center/auto 115% no-repeat;opacity:1}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,var(--canvas) 18%,rgba(10,12,14,.72) 46%,rgba(10,12,14,.15) 100%),linear-gradient(0deg,var(--canvas) 0,rgba(10,12,14,0) 30%)}
+.hero .wrap{position:relative;z-index:1;padding-top:56px;padding-bottom:70px;width:100%}
+.actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
+.btn{font:500 14px var(--sans);border-radius:999px;padding:13px 24px;cursor:pointer;border:1px solid transparent;transition:transform .2s var(--ease),background .2s,border-color .2s}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary{background:var(--fg);color:var(--canvas)}.btn.primary:hover{background:#fff}
+.btn.ghost{background:rgba(10,12,14,.4);color:var(--fg);border-color:var(--line-strong)}.btn.ghost:hover{border-color:var(--muted)}
+.hint{margin-top:18px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--subtle);text-transform:uppercase;max-width:70ch;line-height:1.8}
+#status{margin-top:18px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;min-height:20px;color:var(--muted)}
+#status.err{color:var(--open)}
+body.drag .hero::after{background:linear-gradient(90deg,rgba(74,158,255,.18),rgba(10,12,14,.6))}
+.credit{position:absolute;left:clamp(20px,4vw,48px);bottom:18px;z-index:1;font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--subtle);text-transform:uppercase}
+/* sections */
+section.block{padding:84px 0 24px}
+.glass{background:rgba(18,21,24,.82);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(8px)}
+.pad{padding:22px 26px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.pill{font:400 13px var(--sans);color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:999px;padding:7px 15px;cursor:pointer;transition:all .2s var(--ease)}
+.pill:hover{color:var(--fg);border-color:var(--line-strong)}
+.pill.on{background:var(--fg);color:var(--canvas);border-color:var(--fg);font-weight:500}
+.label{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--subtle);margin-right:6px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0;margin-top:30px;border-top:1px solid var(--line)}
+.tile{padding:20px 20px 8px 0}
+.tile .n{font-weight:300;font-size:2.4rem;letter-spacing:-.02em;line-height:1.1}
+.tile .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+.banner{margin-top:20px;border:1px solid rgba(210,153,34,.45);background:rgba(210,153,34,.08);color:#e8c870;border-radius:12px;padding:12px 16px;font-size:13.5px}
+/* charts */
+.chart{margin-top:26px;padding:20px 22px 12px}
+.panel-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;margin:4px 0 2px}
+.panel-head h3{margin:0;font-weight:400;font-size:17px;letter-spacing:-.01em}
+.panel-head .sub{font-size:12.5px;color:var(--muted)}
+.legend{margin-left:auto;display:flex;gap:16px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.legend i.box{height:10px;width:10px;border-radius:2px}
+svg{display:block;width:100%;height:auto;overflow:visible}
+svg text{font-family:var(--mono);font-size:10px;fill:var(--subtle)}
+.slider{display:flex;align-items:center;gap:14px;margin:6px 0 14px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;flex-wrap:wrap}
+.slider input[type=range]{flex:1;min-width:180px;max-width:420px;accent-color:var(--accent)}
+.slider .v{color:var(--fg);min-width:44px}
+.slider button{font:400 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;background:none;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:4px 12px;cursor:pointer}
+.slider button:hover{color:var(--fg);border-color:var(--line-strong)}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px;margin-top:6px}
+.metric .n{font-weight:300;font-size:1.9rem;letter-spacing:-.02em}
+.metric .l{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+.note{font-size:13.5px;color:var(--muted);margin:16px 0 0;max-width:80ch}
+.note b{color:var(--fg);font-weight:500}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:28px;margin-top:30px}
+.cols h4{margin:0 0 6px;font-weight:400;font-size:19px;font-family:var(--sans)}
+.cols p{margin:0;color:var(--muted);font-size:14.5px}
+.cols .eyebrow{display:block;margin-bottom:12px}
+/* table */
+.table-wrap{max-height:420px;overflow:auto;margin-top:22px;padding:0}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{position:sticky;top:0;background:var(--surface);text-align:left;font:500 10.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);padding:12px 16px;border-bottom:1px solid var(--line)}
+td{padding:9px 16px;border-bottom:1px solid var(--line-subtle);font-variant-numeric:tabular-nums}
+td.m{font-family:var(--mono);font-size:12.5px}
+.ok{color:var(--pass)}.no{color:var(--open)}.na{color:var(--subtle)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+#tip{position:fixed;pointer-events:none;z-index:50;background:rgba(18,21,24,.96);border:1px solid var(--line-strong);border-radius:10px;padding:10px 13px;font-size:12.5px;line-height:1.6;display:none;min-width:190px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#tip .t{font-family:var(--mono);color:var(--muted);font-size:11px;letter-spacing:.06em;margin-bottom:3px}
+#tip b{font-weight:500}
+footer{padding:70px 0 60px;color:var(--subtle);font-size:13px}
+footer .eyebrow{color:var(--subtle)}
+[hidden]{display:none!important}
+@media(max-width:720px){nav{display:none}.tag{display:none}}
+</style>
+</head>
+<body>
+<header class="site-header"><div class="wrap">
+  <a class="wordmark" href="#top">Solar Flares <span>PBL</span></a>
+  <nav id="nav"><a href="#top" class="on">Upload</a><a href="#overview">Overview</a><a href="#nowcast">Nowcast</a><a href="#forecast">Forecast</a><a href="#alerts">Alerts</a><a href="#about">Models</a></nav>
+  <span class="tag">SoLEXS SDD2 · 33-day training</span>
+</div></header>
+
+<main>
+<section class="hero" id="top">
+  <div class="wrap">
+    <div class="eyebrow">Aditya-L1 SoLEXS · nowcasting and forecasting</div>
+    <h1 class="display-1">Upload a table.<br>See the flares.</h1>
+    <p class="lede">Drop in a one-minute feature table. The trained models score every minute: is a flare happening now, and will one start in the next 30 minutes?</p>
+    <div class="actions">
+      <button class="btn primary" id="choose">Choose CSV file</button>
+      <button class="btn ghost" id="s-quiet">Try: quiet test days</button>
+      <button class="btn ghost" id="s-flares">Try: big-flare days</button>
+      <input type="file" id="file" accept=".csv,text/csv" hidden>
+    </div>
+    <div id="status"></div>
+    <div class="hint">Expected format: training_table.csv (time in the first column, 20 base + 28 spectral feature columns). Optional columns y_now and y_forecast_30min switch on accuracy metrics. You can also drag a file anywhere on this page.</div>
+  </div>
+  <div class="credit">Illustrative · NASA / SVS · Not Aditya-L1 data</div>
+</section>
+
+<div id="results" hidden>
+<section class="block" id="overview"><div class="wrap">
+  <div class="eyebrow">Overview</div>
+  <h2 class="display-2" id="ov-title">Scored file</h2>
+  <div id="banner"></div>
+  <div class="row" style="margin-top:26px"><span class="label">Model</span><span id="model-pills" class="row"></span></div>
+  <div class="row" style="margin-top:12px"><span class="label">Day</span><span id="day-pills" class="row"></span></div>
+  <div class="tiles" id="tiles"></div>
+</div></section>
+
+<section class="block" id="timeline" style="padding-top:36px"><div class="wrap">
+  <div class="glass chart">
+    <div class="panel-head"><h3>X-ray count rate</h3><span class="sub" id="lc-sub"></span>
+      <div class="legend"><span><i style="background:var(--sky)"></i>count rate (log)</span><span id="lg-flare"><i class="box" style="background:rgba(230,159,0,.45)"></i>labelled flare</span></div></div>
+    <svg id="svg-lc"></svg>
+    <div class="panel-head" id="nowcast" style="margin-top:22px"><h3>Nowcast score</h3><span class="sub">Probability that a flare is in progress</span>
+      <div class="legend"><span><i style="background:var(--accent)"></i>score</span><span><i class="box" style="background:var(--accent)"></i>alert</span></div></div>
+    <svg id="svg-now"></svg>
+    <div class="slider"><span>Alert threshold</span><input type="range" id="thr-now" min="0" max="1" step="0.005"><span class="v" id="thr-now-v"></span><button id="rs-now">Trained value</button></div>
+    <div class="panel-head" id="forecast" style="margin-top:14px"><h3>Forecast score</h3><span class="sub">Will a flare start in the next 30 minutes?</span>
+      <div class="legend"><span><i style="background:var(--orange)"></i>score</span><span id="lg-pre"><i class="box" style="background:rgba(0,158,115,.55)"></i>true pre-onset window</span><span><i class="box" style="background:var(--orange)"></i>alert</span></div></div>
+    <svg id="svg-fc"></svg>
+    <div class="slider"><span>Alert threshold</span><input type="range" id="thr-fc" min="0" max="1" step="0.005"><span class="v" id="thr-fc-v"></span><button id="rs-fc">Trained value</button></div>
+  </div>
+</div></section>
+
+<section class="block" style="padding-top:36px"><div class="wrap">
+  <div class="cols" style="margin-top:0">
+    <div class="glass pad"><span class="eyebrow">Nowcast accuracy</span><div class="metrics" id="m-now"></div>
+      <p class="note" id="n-now"></p></div>
+    <div class="glass pad"><span class="eyebrow" style="color:var(--orange)">Forecast accuracy</span><div class="metrics" id="m-fc"></div>
+      <p class="note" id="n-fc"></p></div>
+  </div>
+</div></section>
+
+<section class="block" id="alerts"><div class="wrap">
+  <div class="eyebrow">Alerts</div>
+  <h2 class="display-2">Every alert in view</h2>
+  <p class="note" style="margin-top:14px">An alert is a run of consecutive minutes with the score at or above the threshold. “Matches” says whether it overlaps a labelled flare (nowcast) or a true pre-onset window (forecast).</p>
+  <div class="glass table-wrap"><table><thead><tr><th>Task</th><th>Start (UTC)</th><th>End (UTC)</th><th>Minutes</th><th>Peak score</th><th>Matches</th></tr></thead><tbody id="alert-rows"></tbody></table></div>
+  <p class="note" id="alert-note"></p>
+</div></section>
+
+<section class="block" id="about"><div class="wrap">
+  <div class="eyebrow">The models</div>
+  <h2 class="display-2">What is scoring your file</h2>
+  <div class="cols">
+    <div><span class="eyebrow">Trained on</span><h4>33 SoLEXS days</h4><p>11 days of Mar 2025 and 22 days of 2026 (to 18 Oct), one-minute rows from the SDD2 light curve and PI spectrum. The last 10 days and the 7 big-flare days of 2024 were never used for training.</p></div>
+    <div><span class="eyebrow">Nowcast</span><h4>About 0.99 AUC</h4><p>Works well, but a trivial rule (“a flare was on one minute ago”) scores almost the same. Labels come from a threshold detector on the same data, not an official flare list.</p></div>
+    <div><span class="eyebrow" style="color:var(--orange)">Forecast</span><h4>Weak: about 0.6 AUC</h4><p>Better than chance and than a single threshold, but about 80% of alert runs are false alarms. Treat it as a research result, not an operational warning.</p></div>
+  </div>
+</div></section>
+</div>
+</main>
+<footer><div class="wrap"><span class="eyebrow">Solar Flares PBL</span><p style="margin-top:10px">Rows from the 33 training days were seen by the models, so scores on them look better than on new data. Illustrative imagery: NASA / SVS, not Aditya-L1 data.</p></div></footer>
+<div id="tip"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const S={d:null,model:"ensemble",day:"all",thrNow:.5,thrFc:.5,days:[],dayStart:[],dayOf:null,view:[0,0],hover:null};
+const MODELS=[["ensemble","Ensemble"],["logistic","Logistic regression"],["random_forest","Random forest"],["gradient_boosting","Gradient boosting"]];
+const W=1100,L=52,R=14,PW=W-L-R;
+const fmtT=s=>new Date(s*1000).toISOString().slice(0,16).replace("T"," ");
+const status=(m,err)=>{const e=$("status");e.textContent=m||"";e.className=err?"err":""};
+
+/* ---------- loading ---------- */
+async function run(promise,label){
+  status("Scoring "+label+" …");
+  try{
+    const r=await promise; const d=await r.json();
+    if(!r.ok||d.error) throw new Error(d.error||("Server error "+r.status));
+    status(""); onData(d,label);
+  }catch(e){status(e.message||String(e),true)}
+}
+function loadSample(name,label){run(fetch("/api/sample?name="+name),label)}
+async function loadFile(f){
+  if(!f) return; status("Reading "+f.name+" …");
+  const text=await f.text(); run(fetch("/api/predict",{method:"POST",headers:{"Content-Type":"text/csv"},body:text}),f.name);
+}
+$("choose").onclick=()=>$("file").click(); $("file").onchange=e=>loadFile(e.target.files[0]);
+$("s-quiet").onclick=()=>loadSample("quiet","quiet test days"); $("s-flares").onclick=()=>loadSample("flares","big-flare days");
+addEventListener("dragover",e=>{e.preventDefault();document.body.classList.add("drag")});
+addEventListener("dragleave",e=>{if(!e.relatedTarget)document.body.classList.remove("drag")});
+addEventListener("drop",e=>{e.preventDefault();document.body.classList.remove("drag");loadFile(e.dataTransfer.files[0])});
+
+function onData(d,label){
+  S.d=d; S.model="ensemble"; S.day="all"; S.label=label;
+  const dq=new URLSearchParams(location.search).get("day"); if(dq&&d.days.includes(dq)) S.day=dq;
+  S.dayOf=d.t.map(t=>new Date(t*1000).toISOString().slice(0,10));
+  S.days=d.days; S.dayStart=d.days.map(x=>S.dayOf.indexOf(x));
+  resetThr(); $("results").hidden=false;
+  const banner=$("banner"); banner.innerHTML="";
+  if(d.seen_rows>0) banner.innerHTML=`<div class="banner"><b>${d.seen_rows.toLocaleString()} rows</b> in this file come from the 33 days the models were trained on. Scores there look better than they would on new data; use the big-flare days or the latest days for an honest test.</div>`;
+  $("ov-title").textContent=label.replace(/\.csv$/i,"");
+  buildPills(); render();
+  setTimeout(()=>$("overview").scrollIntoView({behavior:"smooth"}),50);
+}
+function resetThr(){const d=S.d;S.thrNow=d.thr.now[S.model];S.thrFc=d.thr.fc[S.model];$("thr-now").value=S.thrNow;$("thr-fc").value=S.thrFc}
+function buildPills(){
+  $("model-pills").innerHTML=MODELS.map(([k,n])=>`<button class="pill ${k===S.model?"on":""}" data-m="${k}">${n}</button>`).join("");
+  $("day-pills").innerHTML=[["all","All days"]].concat(S.days.map(x=>[x,x.slice(5)])).map(([k,n])=>`<button class="pill ${k===S.day?"on":""}" data-d="${k}">${n}</button>`).join("");
+  document.querySelectorAll("#model-pills .pill").forEach(b=>b.onclick=()=>{S.model=b.dataset.m;resetThr();buildPills();render()});
+  document.querySelectorAll("#day-pills .pill").forEach(b=>b.onclick=()=>{S.day=b.dataset.d;buildPills();render()});
+}
+$("thr-now").oninput=e=>{S.thrNow=+e.target.value;schedule()};$("thr-fc").oninput=e=>{S.thrFc=+e.target.value;schedule()};
+$("rs-now").onclick=()=>{S.thrNow=S.d.thr.now[S.model];$("thr-now").value=S.thrNow;render()};
+$("rs-fc").onclick=()=>{S.thrFc=S.d.thr.fc[S.model];$("thr-fc").value=S.thrFc;render()};
+let raf=0;function schedule(){cancelAnimationFrame(raf);raf=requestAnimationFrame(render)}
+
+/* ---------- helpers ---------- */
+function viewRange(){
+  const n=S.d.n; if(S.day==="all") return [0,n];
+  const k=S.days.indexOf(S.day); const a=S.dayStart[k]; let b=a; while(b<n&&S.dayOf[b]===S.day) b++; return [a,b];
+}
+function runsOf(pred,i0,i1){const out=[];let a=-1;for(let i=i0;i<i1;i++){if(pred(i)){if(a<0)a=i}else if(a>=0){out.push([a,i-1]);a=-1}}if(a>=0)out.push([a,i1-1]);return out}
+function alertRuns(score,thr,i0,i1){ // runs over valid rows only (invalid minutes never alert, and do not split a run)
+  const v=S.d.valid,out=[];let cur=null;
+  for(let i=i0;i<i1;i++){ if(!v[i]) continue; if(score[i]>=thr){ if(!cur) cur=[i,i]; else cur[1]=i } else if(cur){out.push(cur);cur=null} }
+  if(cur) out.push(cur); return out;
+}
+function metrics(key,i0,i1){
+  const d=S.d,score=d[key][S.model],thr=key==="now"?S.thrNow:S.thrFc,v=d.valid,runs=alertRuns(score,thr,i0,i1);
+  const out={runs:runs.length,thr};
+  if(!d.labels) return out;
+  const y=key==="now"?d.y_now:d.y_fc,ids=key==="now"?d.ev_id:d.on_id;
+  let tp=0,fn=0,fp=0,tn=0;const all=new Set(),hit=new Set();
+  for(let i=i0;i<i1;i++){ if(!v[i]) continue; const a=score[i]>=thr; if(y[i]){a?tp++:fn++}else{a?fp++:tn++}
+    if(ids[i]>=0){all.add(ids[i]); if(a) hit.add(ids[i])} }
+  out.tss=(tp+fn?tp/(tp+fn):0)-(fp+tn?fp/(fp+tn):0); out.flares=all.size; out.caught=hit.size;
+  out.false=runs.filter(([a,b])=>{for(let i=a;i<=b;i++) if(v[i]&&ids[i]>=0) return false; return true}).length;
+  out.auc=d.auc[key][S.model]; return out;
+}
+function bins(values,i0,i1,nb,useValid=true){
+  const n=i1-i0,out=new Array(nb).fill(null),v=S.d.valid;
+  for(let k=0;k<n;k++){const x=values[i0+k];if(x==null||!isFinite(x)||(useValid&&!v[i0+k]))continue;const b=Math.min(nb-1,Math.floor(k*nb/n));if(out[b]==null||x>out[b])out[b]=x}
+  return out;
+}
+const px=(i,i0,n)=>L+((i-i0)/Math.max(1,n))*PW;
+function pathOf(b,ymap){let p="",on=false;const nb=b.length;for(let k=0;k<nb;k++){if(b[k]==null){on=false;continue}const x=(L+(k+.5)/nb*PW).toFixed(1),y=ymap(b[k]).toFixed(1);p+=(on?"L":"M")+x+" "+y;on=true}return p}
+function rects(rs,i0,n,y,h,fill,minw=1.6){return rs.map(([a,b])=>`<rect x="${px(a,i0,n).toFixed(1)}" y="${y}" width="${Math.max(minw,(b-a+1)/n*PW).toFixed(1)}" height="${h}" fill="${fill}"/>`).join("")}
+
+/* ---------- render ---------- */
+function render(){
+  const d=S.d,[i0,i1]=viewRange(),n=i1-i0;S.view=[i0,i1];
+  $("thr-now-v").textContent=S.thrNow.toFixed(2);$("thr-fc-v").textContent=S.thrFc.toFixed(2);
+  const mNow=metrics("now",i0,i1),mFc=metrics("fc",i0,i1);
+  // tiles
+  const validRows=(()=>{let c=0;for(let i=i0;i<i1;i++)c+=d.valid[i];return c})();
+  const flareSet=new Set();if(d.labels)for(let i=i0;i<i1;i++)if(d.valid[i]&&d.ev_id[i]>=0)flareSet.add(d.ev_id[i]);
+  const T=(n,l,c)=>`<div class="tile"><div class="n" style="${c?"color:"+c:""}">${n}</div><div class="l">${l}</div></div>`;
+  $("tiles").innerHTML=T(validRows.toLocaleString(),"minutes scored")+T(S.day==="all"?S.days.length:1,S.day==="all"?"days":"day in view")+
+    T(d.labels?flareSet.size:"—","labelled flares")+T(mNow.runs,"nowcast alerts","var(--accent)")+T(mFc.runs,"forecast alerts","var(--orange)");
+  // charts
+  drawLC(i0,i1);drawScore("svg-now",d.now[S.model],S.thrNow,"var(--accent)",i0,i1,d.labels?d.y_now:null,"rgba(230,159,0,.2)");
+  drawScore("svg-fc",d.fc[S.model],S.thrFc,"var(--orange)",i0,i1,d.labels?d.y_fc:null,"rgba(0,158,115,.28)",true);
+  $("lg-flare").style.display=d.labels?"":"none";$("lg-pre").style.display=d.labels?"":"none";
+  $("lc-sub").textContent=S.day==="all"?"all days, aligned by row (gaps between days removed)":S.day+" UTC";
+  // metrics
+  renderMetrics("m-now","n-now",mNow,"now");renderMetrics("m-fc","n-fc",mFc,"fc");
+  renderAlerts(i0,i1);
+}
+function xAxis(i0,i1,labels){
+  const n=i1-i0;let s="";
+  if(S.day==="all"){
+    const k=Math.max(1,Math.ceil(48/(PW/Math.max(1,S.days.length))));
+    S.days.forEach((dd,j)=>{const i=S.dayStart[j];if(i<i0||i>=i1)return;const x=px(i,i0,n);
+      if(j>0)s+=`<line x1="${x}" x2="${x}" y1="0" y2="{H}" stroke="#2A3138" stroke-width="1" stroke-dasharray="2 3"/>`;
+      if(labels&&j%k===0)s+=`<text x="${x+3}" y="{LBL}">${dd.slice(5)}</text>`});
+  }else{
+    for(let i=i0;i<i1;i++){const t=S.d.t[i];if((t%10800)===0){const x=px(i,i0,n),hh=new Date(t*1000).toISOString().slice(11,16);
+      s+=`<line x1="${x}" x2="${x}" y1="0" y2="{H}" stroke="#1E2328" stroke-width="1"/>${labels?`<text x="${x}" y="{LBL}" text-anchor="middle">${hh}</text>`:""}`}}
+  }
+  return s;
+}
+function frame(id,H,inner,axis){
+  const svg=$(id);svg.setAttribute("viewBox",`0 0 ${W} ${H+(axis?16:0)}`);
+  const ax=xAxis(S.view[0],S.view[1],axis).replaceAll("{H}",H).replaceAll("{LBL}",H+14);
+  svg.innerHTML=inner.replaceAll("{AX}",ax)+`<line class="hv" x1="-10" x2="-10" y1="0" y2="${H}" stroke="#E8EBED" stroke-opacity=".6" stroke-width="1"/><rect class="hit" x="${L}" y="0" width="${PW}" height="${H}" fill="transparent"/>`;
+  const hit=svg.querySelector(".hit");hit.onmousemove=e=>hoverAt(e,svg,id);hit.onmouseleave=()=>{document.querySelectorAll(".hv").forEach(l=>{l.setAttribute("x1",-10);l.setAttribute("x2",-10)});$("tip").style.display="none"};
+}
+function drawLC(i0,i1){
+  const d=S.d,n=i1-i0,H=190,nb=Math.min(n,PW);
+  const lg=d.rate.map(v=>v==null||v<=0?null:Math.log10(v));
+  const b=bins(lg,i0,i1,nb);const vals=b.filter(x=>x!=null);
+  let lo=Math.floor(Math.min(...vals)),hi=Math.ceil(Math.max(...vals));if(!isFinite(lo)){lo=0;hi=1}if(hi===lo)hi=lo+1;
+  const y=v=>8+(H-8-6)*(1-(v-lo)/(hi-lo));let grid="";
+  for(let k=lo;k<=hi;k++){const yy=y(k);grid+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#1E2328"/><text x="${L-8}" y="${yy+3}" text-anchor="end">${k<=0?Math.pow(10,k):k<3?Math.pow(10,k):Math.pow(10,k-3)+"k"}</text>`}
+  const shade=d.labels?rects(runsOf(i=>d.valid[i]&&d.y_now[i]===1,i0,i1),i0,n,0,H,"rgba(230,159,0,.28)"):"";
+  frame("svg-lc",H,`${grid}${shade}{AX}<path d="${pathOf(b,y)}" fill="none" stroke="#56B4E9" stroke-width="1.2" stroke-linejoin="round"/><text x="2" y="${H/2}" transform="rotate(-90 8 ${H/2})" text-anchor="middle" style="font-size:9px">counts / s</text>`,false);
+}
+function drawScore(id,score,thr,color,i0,i1,labels,shadeColor,axis){
+  const n=i1-i0,H=130,nb=Math.min(n,PW),b=bins(score,i0,i1,nb),y=v=>6+(H-6-14)*(1-v);let grid="";
+  [0,.25,.5,.75,1].forEach(v=>{const yy=y(v);grid+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#1E2328"/><text x="${L-8}" y="${yy+3}" text-anchor="end">${v}</text>`});
+  const shade=labels?rects(runsOf(i=>S.d.valid[i]&&labels[i]===1,i0,i1),i0,n,0,H-8,shadeColor):"";
+  const al=rects(alertRuns(score,thr,i0,i1),i0,n,H-10,8,color,2);
+  frame(id,H,`${grid}${shade}{AX}<path d="${pathOf(b,y)}" fill="none" stroke="${color}" stroke-width="1.2" stroke-linejoin="round"/><line x1="${L}" x2="${W-R}" y1="${y(thr)}" y2="${y(thr)}" stroke="#E8EBED" stroke-opacity=".65" stroke-dasharray="5 4"/>${al}`,axis);
+}
+function renderMetrics(boxId,noteId,m,key){
+  const d=S.d,box=$(boxId),M=(n,l)=>`<div class="metric"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  let h="";
+  if(d.labels){
+    h+=M(m.auc==null?"—":m.auc.toFixed(3),"AUC (whole file)")+M(m.tss.toFixed(2),"TSS in view")+M(`${m.caught} / ${m.flares}`,key==="now"?"flares caught":"onsets warned")+M(m.runs,"alert runs")+
+       M(m.runs?Math.round(100*m.false/m.runs)+"%":"—","false alerts");
+  }else h+=M(m.runs,"alert runs");
+  box.innerHTML=h;
+  $(noteId).innerHTML=!d.labels?"This file has no <b>y_now</b> / <b>y_forecast_30min</b> columns, so accuracy cannot be computed. Alerts are still shown."
+   :key==="now"?"Labels come from a threshold detector on the same data. <b>Persistence</b> (“a flare was on a minute ago”) scores about as well, so read these as agreement with that detector."
+   :"Forecast skill is <b>weak</b>: true AUC is about 0.6 and most alert runs are false alarms. “Onsets warned” counts flares preceded by at least one alert in the 30 minutes before.";
+}
+function renderAlerts(i0,i1){
+  const d=S.d,rows=[];
+  [["now","Nowcast",d.now[S.model],S.thrNow,d.labels?d.ev_id:null,"var(--accent)"],["fc","Forecast",d.fc[S.model],S.thrFc,d.labels?d.on_id:null,"var(--orange)"]].forEach(([k,name,sc,thr,ids,col])=>{
+    alertRuns(sc,thr,i0,i1).forEach(([a,b])=>{let pk=0,match=null;for(let i=a;i<=b;i++){if(d.valid[i]&&sc[i]>pk)pk=sc[i];if(ids&&d.valid[i]&&ids[i]>=0)match=true}if(ids&&match==null)match=false;rows.push({a,b,name,col,pk,match})})});
+  rows.sort((x,y)=>x.a-y.a);const cap=400,shown=rows.slice(0,cap);
+  $("alert-rows").innerHTML=shown.map(r=>`<tr><td><span class="dot" style="background:${r.col}"></span>${r.name}</td><td class="m">${fmtT(d.t[r.a])}</td><td class="m">${fmtT(d.t[r.b])}</td><td class="m">${r.b-r.a+1}</td><td class="m">${r.pk.toFixed(3)}</td><td class="${r.match===true?"ok":r.match===false?"no":"na"}">${r.match===true?"yes":r.match===false?"no (false alarm)":"—"}</td></tr>`).join("")||`<tr><td colspan="6" class="na">No alerts at this threshold.</td></tr>`;
+  $("alert-note").textContent=rows.length>cap?`Showing the first ${cap} of ${rows.length.toLocaleString()} alerts.`:`${rows.length.toLocaleString()} alert${rows.length===1?"":"s"} in view.`;
+}
+function hoverAt(e,svg,id){
+  const r=svg.getBoundingClientRect(),vx=(e.clientX-r.left)/r.width*W;if(vx<L||vx>W-R)return;
+  const [i0,i1]=S.view,i=Math.min(i1-1,Math.max(i0,i0+Math.floor((vx-L)/PW*(i1-i0)))),d=S.d,x=(L+((i-i0)+.5)/(i1-i0)*PW);
+  document.querySelectorAll(".hv").forEach(l=>{l.setAttribute("x1",x);l.setAttribute("x2",x)});
+  const tip=$("tip"),sn=d.now[S.model][i],sf=d.fc[S.model][i];
+  tip.innerHTML=`<div class="t">${fmtT(d.t[i])} UTC${d.valid[i]?"":" · no data"}</div>Count rate <b>${d.rate[i]==null?"—":d.rate[i].toLocaleString()}</b> /s<br>`+
+   `<span style="color:var(--accent)">Nowcast</span> <b>${sn.toFixed(3)}</b>${sn>=S.thrNow?" · alert":""}${d.labels?(d.y_now[i]?" · flare":""):""}<br>`+
+   `<span style="color:var(--orange)">Forecast</span> <b>${sf.toFixed(3)}</b>${sf>=S.thrFc?" · alert":""}${d.labels?(d.y_fc[i]?" · pre-onset":""):""}`;
+  tip.style.display="block";tip.style.left=Math.min(innerWidth-230,e.clientX+16)+"px";tip.style.top=(e.clientY+16)+"px";
+}
+/* open straight into a sample: /?sample=quiet or /?sample=flares */
+{const q=new URLSearchParams(location.search).get("sample");if(q==="quiet")loadSample("quiet","quiet test days");else if(q==="flares")loadSample("flares","big-flare days")}
+/* nav highlight */
+const links=[...document.querySelectorAll("#nav a")];
+addEventListener("scroll",()=>{let cur="top";links.forEach(a=>{const el=document.querySelector(a.getAttribute("href"));if(el&&el.offsetParent!==null&&el.getBoundingClientRect().top<160)cur=a.getAttribute("href")});links.forEach(a=>a.classList.toggle("on",a.getAttribute("href")===cur))},{passive:true});
+</script>
+</body>
+</html>
