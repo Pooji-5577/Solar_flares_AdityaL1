@@ -1,0 +1,218 @@
+---
+/**
+ * Build — reproduce the dataset independently.
+ *
+ * Reproducibility is a headline claim, and a claim without an executable path is
+ * marketing. This surface publishes the exact table inventory with per-table digests,
+ * the pinned environment, and the record of a byte-identical rebuild.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import PageContract from "@/components/shell/PageContract.astro";
+import AmbientBackdrop from "@/components/shell/AmbientBackdrop.astro";
+import KeyFacts from "@/components/shell/KeyFacts.astro";
+import NextDepth from "@/components/shell/NextDepth.astro";
+import LearnMore from "@/components/editorial/LearnMore.astro";
+import build from "@/generated/data/build/index.json";
+
+const { identity, tables, frozen_at } = build.data;
+
+const totalBytes = tables.reduce((sum, t) => sum + t.bytes, 0);
+const formatBytes = (bytes: number) => {
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let scaled = bytes;
+  let i = 0;
+  while (scaled >= 1024 && i < units.length - 1) {
+    scaled /= 1024;
+    i += 1;
+  }
+  return `${scaled.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+};
+---
+
+<BaseLayout
+  title="Build — AdityaNet"
+  description="Reproduce the AdityaNet canonical dataset independently: table inventory, per-table digests, pinned environment, and a byte-identical rebuild record."
+>
+  <AmbientBackdrop
+    src="/video/space-skywatch.mp4"
+    poster="/video/space-skywatch-poster.jpg"
+    shape="frame"
+    align="right"
+  />
+
+  <main id="main" class="mx-auto max-w-4xl px-6 pb-32">
+    <div class="section-tight flow">
+      <p class="eyebrow">Reproduce</p>
+      <h1 class="display-1 mt-5">Rebuild it yourself.</h1>
+      <p class="lede mt-6">
+        A reproducibility claim without an executable path is marketing. This is the path.
+      </p>
+    </div>
+
+    <PageContract
+      what="The build surface: what the dataset is made of, the digest of every table, and the commands to rebuild it."
+      trust="The digests are read from the freeze manifest committed alongside the data, and a sampled rebuild has been checked byte-for-byte against the frozen output."
+      verify={[
+        { href: "/reproducibility/", label: "Reproducibility metrics", note: "Including what is unverified" },
+        { href: "/build/reproduce/", label: "The reproduction record", note: "Environment and rebuild result" },
+        { href: "/data/card/", label: "The dataset card", note: "Coverage and limitations" },
+        { href: "/archive/", label: "Fetch the payloads", note: "Digest-addressed JSON" },
+      ]}
+    />
+
+
+    <KeyFacts
+      facts={[
+        { label: "Canonical tables", value: String(tables.length), note: "each independently verifiable" },
+        { label: "Total files", value: tables.reduce((n, t) => n + t.n_files, 0).toLocaleString("en-US") },
+        { label: "Dataset size", value: formatBytes(totalBytes) },
+        { label: "Rebuild", value: "byte-identical", note: "verified against the published digest", emphasis: true },
+      ]}
+    />
+
+    {/* Identity */}
+    <section class="section flow" aria-labelledby="identity-heading">
+      <h2 id="identity-heading" class="display-3">Identity</h2>
+      <p class="lede mt-4">What you are rebuilding, and what a correct rebuild must match.</p>
+
+      {/* The two digests are the whole point of this section, so they lead — full width,
+          monospace, selectable. Everything else is context and becomes a chip. */}
+      <div class="reveal-stagger mt-8 grid gap-4 lg:grid-cols-2">
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Dataset digest</p>
+          <p class="mt-3 font-mono text-sm break-all text-fg" data-numeric>{identity.dataset_hash}</p>
+        </div>
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Provenance digest</p>
+          <p class="mt-3 font-mono text-sm break-all text-fg" data-numeric>{identity.provenance_hash}</p>
+        </div>
+      </div>
+
+      <ul class="mt-6 flex flex-wrap gap-2" aria-label="Build identity">
+        <li class="chip"><span class="chip-key">version</span>{build.dataset_version}</li>
+        <li class="chip"><span class="chip-key">commit</span>{identity.build_commit}</li>
+        <li class="chip"><span class="chip-key">spec</span>{identity.specification_revision}</li>
+        <li class="chip"><span class="chip-key">archive</span>{identity.archive_span}</li>
+        <li class="chip"><span class="chip-key">frozen</span>{frozen_at}</li>
+      </ul>
+
+      <dl class="sr-only">
+        <div class="flex flex-wrap gap-x-4">
+          <dt class="w-44 shrink-0 text-fg-muted">Dataset version</dt>
+          <dd class="font-mono">{build.dataset_version}</dd>
+        </div>
+        <div class="flex flex-wrap gap-x-4">
+          <dt class="w-44 shrink-0 text-fg-muted">Dataset digest</dt>
+          <dd class="font-mono break-all" data-numeric>{identity.dataset_hash}</dd>
+        </div>
+        <div class="flex flex-wrap gap-x-4">
+          <dt class="w-44 shrink-0 text-fg-muted">Provenance digest</dt>
+          <dd class="font-mono break-all" data-numeric>{identity.provenance_hash}</dd>
+        </div>
+        <div class="flex flex-wrap gap-x-4">
+          <dt class="w-44 shrink-0 text-fg-muted">Build commit</dt>
+          <dd class="font-mono">{identity.build_commit}</dd>
+        </div>
+        <div class="flex flex-wrap gap-x-4">
+          <dt class="w-44 shrink-0 text-fg-muted">Specification</dt>
+          <dd class="font-mono">{identity.specification_revision}</dd>
+        </div>
+        <div class="flex flex-wrap gap-x-4">
+          <dt class="w-44 shrink-0 text-fg-muted">Archive span</dt>
+          <dd class="font-mono">{identity.archive_span}</dd>
+        </div>
+        <div class="flex flex-wrap gap-x-4">
+          <dt class="w-44 shrink-0 text-fg-muted">Frozen at</dt>
+          <dd class="font-mono">{frozen_at}</dd>
+        </div>
+      </dl>
+    </section>
+
+    {/* What the project is made of — four cards, no prose. */}
+    <section class="section flow" aria-labelledby="stack-h">
+      <h2 id="stack-h" class="display-3">What it is made of</h2>
+
+      <div class="reveal-stagger mt-9 grid gap-4 md:grid-cols-2">
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Science</p>
+          <p class="mt-3 text-md text-fg">Frozen dataset, pre-registered protocol</p>
+          <ul class="mt-4 flex flex-wrap gap-2">
+            <li class="chip">SoLEXS</li>
+            <li class="chip">HEL1OS</li>
+            <li class="chip">Level-1 FITS</li>
+            <li class="chip">Parquet</li>
+          </ul>
+        </div>
+
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Engineering</p>
+          <p class="mt-3 text-md text-fg">Fail-loud parsing, contract-checked</p>
+          <ul class="mt-4 flex flex-wrap gap-2">
+            <li class="chip">Python</li>
+            <li class="chip">Alembic</li>
+            <li class="chip">SHA-256</li>
+            <li class="chip">Pytest</li>
+          </ul>
+        </div>
+
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Frontend</p>
+          <p class="mt-3 text-md text-fg">Static islands, evidence ships 0&nbsp;KB JS</p>
+          <ul class="mt-4 flex flex-wrap gap-2">
+            <li class="chip">Astro</li>
+            <li class="chip">React</li>
+            <li class="chip">GSAP</li>
+            <li class="chip">Lenis</li>
+          </ul>
+        </div>
+
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Infrastructure</p>
+          <p class="mt-3 text-md text-fg">Reproducible build, budget-gated CI</p>
+          <ul class="mt-4 flex flex-wrap gap-2">
+            <li class="chip">GitHub Actions</li>
+            <li class="chip">Static hosting</li>
+            <li class="chip">Strict CSP</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    {/* The pipeline, as a diagram rather than a paragraph. */}
+    <section class="section flow" aria-labelledby="arch-h">
+      <h2 id="arch-h" class="display-3">Archive to evidence</h2>
+      <ol class="reveal-stagger mt-9 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" role="list">
+        {[
+          { n: "01", t: "ISSDC archive", d: "Raw Level-1 products, as published" },
+          { n: "02", t: "Parse & validate", d: "Twenty fail-loud rules; no silent coercion" },
+          { n: "03", t: "Freeze", d: "Digested, versioned, immutable" },
+          { n: "04", t: "Publish", d: "Every figure traceable to an artifact" },
+        ].map((step) => (
+          <li class="glass p-6">
+            <p class="font-mono text-2xs tracking-[0.18em] text-eyebrow">{step.n}</p>
+            <p class="mt-4 text-md text-fg">{step.t}</p>
+            <p class="mt-2 text-sm leading-relaxed text-fg-muted">{step.d}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    {/* The door to the reproduction record. */}
+    <section class="section-tight flow">
+      <div class="flex flex-wrap gap-3">
+        <LearnMore
+          href="/build/reproduce/"
+          label="The reproduction record"
+          note="Per-table digests, pinned environment, rebuild result"
+        />
+        <LearnMore
+          href="/pipeline/"
+          label="How the pipeline works"
+          note="Stage by stage, with what each produced"
+        />
+      </div>
+    </section>
+
+    <NextDepth />
+  </main>
+</BaseLayout>

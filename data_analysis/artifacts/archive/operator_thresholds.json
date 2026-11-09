@@ -1,0 +1,39 @@
+{
+  "yellow_threshold": 0.46,
+  "red_threshold": 0.88,
+  "uncertainty_suppress_red_to_yellow": 0.1,
+  "uncertainty_suppress_yellow_to_green": 0.15,
+  "uncertainty_suppress_all_to_green": 0.2,
+  "confidence_high_prob_min": 0.88,
+  "confidence_high_unc_max": 0.05,
+  "confidence_medium_prob_min": 0.46,
+  "confidence_medium_unc_max": 0.1,
+  "yellow_selection": {
+    "precision": 0.425314,
+    "recall": 0.613888,
+    "tss": 0.363247,
+    "far": 0.574686,
+    "f1": 0.502491,
+    "trust_score": 0.430802
+  },
+  "red_selection": {
+    "precision": 0.517326,
+    "recall": 0.353255,
+    "tss": 0.253664,
+    "far": 0.482674,
+    "f1": 0.41983,
+    "trust_score": 0.428583
+  },
+  "roc_auc": 0.748514,
+  "QUARANTINE_REASON": "LEAKED_TEST_DERIVED",
+  "quarantine_details": {
+    "quarantined_on": "2026-07-03T13:23:37.002779+00:00",
+    "original_sha256_before_field_injection": "033063ef0dfcae97966c3a37d0f5ef8ca05b0ced1df2e5f1c2a9788037f0ce10",
+    "evidence": [
+      "artifacts/sprint22_5/FINAL_VERDICT.md (LEAKAGE PROVEN)",
+      "artifacts/sprint22_5/04_leakage_proof.md (conditions A-D all CONFIRMED)",
+      "scripts/optimize_operational_policy.py:6 (generator docstring: swept saved TEST-set probabilities)"
+    ],
+    "successor_policy": "artifacts/policies/operator_policy_v2.json"
+  }
+}

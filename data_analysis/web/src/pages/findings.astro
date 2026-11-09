@@ -1,0 +1,166 @@
+---
+/**
+ * Findings — the STORY surface.
+ *
+ * Editorial split: this page states what was found and shows why it is believable. The
+ * paper — full benchmark tables for every task, the adjudicated verdicts verbatim, the
+ * frozen evaluation protocol, the ablation report — lives at /findings/method.
+ *
+ * The split is only honest because the detail is still published in full, one click away,
+ * at a citable URL. Brevity here is editing, not omission.
+ *
+ * The central claim is a VISUAL claim: the models' confidence intervals overlap the
+ * threshold baseline's, so none is distinguishable from it. Drawing the intervals lets a
+ * visitor see that in about a second, where the table asked them to compare sixteen
+ * decimals. The numbers stay printed beside every bar.
+ *
+ * Nothing here is computed by this page. Every figure is read from the same benchmark
+ * artifact the tables at /findings/method render, so the summary cannot drift from the
+ * evidence it summarises.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import PageContract from "@/components/shell/PageContract.astro";
+import AmbientBackdrop from "@/components/shell/AmbientBackdrop.astro";
+import CompareBars from "@/components/editorial/CompareBars.astro";
+import LearnMore from "@/components/editorial/LearnMore.astro";
+import NextDepth from "@/components/shell/NextDepth.astro";
+import benchmark from "@/generated/data/findings/benchmark.json";
+
+const { tasks, ablation, meta } = benchmark.data;
+
+// The headline task. Its rows drive the comparison graphic.
+const headline = tasks[0]!;
+
+// Trivial baselines sit at 0.5 by construction, so the axis starts just below it.
+const DOMAIN: readonly [number, number] = [0.45, 1.0];
+
+const bars = headline.rows.map((r) => ({
+  label: r.label,
+  value: r.roc_auc,
+  ci95: r.roc_auc_ci95,
+  isBaseline: r.is_baseline,
+  highlight: r.label.toLowerCase().includes("threshold"),
+}));
+---
+
+<BaseLayout
+  title="Findings — AdityaNet"
+  description="Machine learning provided no operational benefit over a simple threshold detector on the Aditya-L1 X-ray archive. The negative result, published in full."
+>
+  <AmbientBackdrop
+    src="/video/space-galaxies.mp4"
+    poster="/video/space-galaxies-poster.jpg"
+    shape="frame"
+    align="right"
+  />
+
+  <main id="main" class="mx-auto max-w-5xl px-6 pb-32">
+    {/* 1 — the verdict, at the scale of a claim */}
+    <section class="section flow">
+      <p class="eyebrow">Scientific conclusions</p>
+      <h1 class="verdict mt-7">A threshold beat the models where it counts.</h1>
+      <p class="lede mt-8">
+        Machine learning ranks individual minutes better — but it detects no more flares,
+        and it raises about five times as many false alarms. A one-line detector on the
+        SoLEXS count rate remains the operational recommendation.
+      </p>
+    </section>
+
+    <PageContract
+      what="The scientific conclusions of the project, stated at the scale of a claim — including the result that says machine learning did not help."
+      trust="Every figure on this page is read from the same committed benchmark artifact that the full method tables render from, so the summary cannot drift from the evidence it summarises."
+      verify={[
+        { href: "/validation/", label: "The proof", note: "Curves, calibration, error analysis" },
+        { href: "/evidence/", label: "Trace these claims", note: "Claim → artifact → commit" },
+        { href: "/journey/", label: "How this was reached", note: "The investigation, in order" },
+        { href: "/models/", label: "Every model that was tried", note: "Eight cards" },
+      ]}
+    />
+
+
+    {/* 2 — the comparison. The overlap IS the finding. */}
+    <section class="section flow" aria-labelledby="compare-h">
+      <h2 id="compare-h" class="display-3">Every model, against the simple detector</h2>
+      <p class="lede mt-4">{headline.label} · higher is better</p>
+
+      <div class="mt-9">
+        <CompareBars
+          rows={bars}
+          domain={DOMAIN}
+          axisLabel="ROC-AUC · bars show the 95% confidence interval"
+          caption="On ROC-AUC the intervals overlap: no model separates itself from the threshold. That is the basis for the verdict — but ROC-AUC is not the whole story at a 1.2% base rate, which is why the validation page reports precision, recall and the false-alarm cost alongside it."
+        />
+      </div>
+    </section>
+
+    {/* 3 — why it should be believed */}
+    <section class="section flow" aria-labelledby="evidence-h">
+      <h2 id="evidence-h" class="display-3">Why this result holds</h2>
+      <p class="lede mt-4">
+        The comparison is decided on the metric that matters operationally — how many real
+        flares are caught, and at what alarm cost — not on the metric that flatters a model.
+      </p>
+
+      <div class="reveal-stagger mt-9 grid gap-4 md:grid-cols-3">
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">
+            Decided in advance
+          </p>
+          <p class="mt-4 font-mono text-metric leading-none text-fg" data-numeric>
+            seed {meta.seed}
+          </p>
+          <p class="mt-3 text-sm leading-relaxed text-fg-muted">
+            The protocol was frozen before any model was fit.
+          </p>
+        </div>
+
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">
+            Extra spectral bands
+          </p>
+          <p class="mt-4 font-mono text-metric leading-none text-open" data-numeric>
+            +{ablation.delta_bands!.toFixed(4)}
+          </p>
+          <p class="mt-3 text-sm leading-relaxed text-fg-muted">
+            Δ ROC-AUC from added spectral resolution. A confirmed null.
+          </p>
+        </div>
+
+        <div class="glass p-6">
+          <p class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">
+            Held-out test
+          </p>
+          <p class="mt-4 font-mono text-metric leading-none text-fg" data-numeric>
+            {headline.n_test.toLocaleString("en-US")}
+          </p>
+          <p class="mt-3 text-sm leading-relaxed text-fg-muted">
+            Minutes from {meta.test_start} onward, never seen in training.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    {/* 4 — the door to the paper */}
+    <section class="section-tight flow">
+      <div class="flex flex-wrap gap-3">
+        <LearnMore
+          href="/validation/"
+          label="See the proof"
+          note="ROC, PR, calibration, confusion, error analysis"
+        />
+        <LearnMore
+          href="/findings/method/"
+          label="Read the full method"
+          note="Benchmark tables, adjudicated verdicts, evaluation protocol"
+        />
+        <LearnMore
+          href="/engineering/provenance/"
+          label="See how it was checked"
+          note="Six contradictions, each ruled on"
+        />
+      </div>
+    </section>
+
+    <NextDepth />
+  </main>
+</BaseLayout>

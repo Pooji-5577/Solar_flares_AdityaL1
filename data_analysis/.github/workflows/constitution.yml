@@ -1,0 +1,145 @@
+# Constitution gates — Architecture Freeze v1.0
+#
+# Wires the gates delivered by Issues #1-#4 into CI. It adds no gate and changes no gate
+# behaviour: each job invokes a program exactly as implemented and reports its exit code.
+#
+# TWO JOBS, NOT ONE.
+#
+# TIS §16.5 lists `links` and `architecture` as separate gates, and they fail for unrelated
+# reasons — a dangling citation is not the same defect as a forbidden directory name.
+# Merging them would report one red X for two causes, and the first failure would mask the
+# second. Separate jobs also mean branch protection can require each by name.
+#
+# GATE RELIABILITY — why neither trigger carries a `paths:` filter.
+#
+# ADR-0020 and STD-07: a gate that does not run must fail, not pass. GitHub reports a
+# required check that was never triggered as "Expected — waiting for status to be reported",
+# which never resolves, so an untriggered required check blocks the merge rather than
+# silently allowing it. That is the behaviour we want, and a path filter would defeat it in
+# the other direction — a PR touching only `adr/` would skip the very gate that validates
+# `adr/`.
+#
+# This repository has already been bitten twice by filtered gates: GitHub truncates the file
+# list it evaluates for `paths:` on large diffs, and a 3,231-file restructure skipped the web
+# gate entirely. Both `ci.yml` and `web.yml` run unfiltered for the same reason.
+#
+# The two jobs together finish in seconds. There is no cost worth optimising here, and
+# STD-20 forbids optimising without a measurement in any case.
+
+name: constitution
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Both gates resolve paths from the repository root. `ci.yml` pins its working directory to
+# research/; these must not inherit that.
+defaults:
+  run:
+    working-directory: .
+
+jobs:
+  links:
+    name: links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # No dependency installation. tools/gates/links.py imports only the standard library,
+      # deliberately: it is the gate that must be able to run before anything is installed,
+      # and a gate that cannot execute is a failure rather than a skip.
+      - name: Constitution link integrity
+        run: python tools/gates/links.py
+
+  architecture:
+    name: architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # jsonschema validates the contracts against the JSON Schema specification rather
+      # than against a second, hand-rolled implementation of it. Added by M2/E4/#11, whose
+      # tests cannot run without a validator.
+      - run: pip install pytest jsonschema
+
+      # Includes the deliberate-violation tests for every gate. This is what makes the
+      # fail-closed property continuously verified rather than demonstrated once: if a gate
+      # is ever weakened so that it stops rejecting a violation, the test that expects the
+      # rejection fails here.
+      #
+      # -rs reports skips. A silently growing skip set is how a suite stops testing anything
+      # while still reporting green (STD-12).
+      - name: Architecture and gate self-tests
+        run: pytest tests/architecture -q -rs
+
+  # Unit tests live beside the code they test (TIS `tests/` README), so they are not under
+  # tests/. Without this job they would never execute — which is the defect that left 188
+  # tests gating nothing in this repository's own history. Added when the first production
+  # component landed; reported as EPD-004, a gap in the Engineering Plan rather than a
+  # change to any gate.
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # numpy + astropy added by M3/E5/#17: the SoLEXS products are FITS, and the parsers'
+      # unit tests build real FITS fixtures to fire each fail-loud rule against. Without
+      # these the whole parser suite would error at import rather than run.
+      - run: pip install pytest numpy astropy
+
+      # `domain` added by M2/E4/#12 and `contexts` by M3/E5/#15, each placing its unit tests
+      # beside the code they test. Without the path here those tests would exist and never
+      # run — the exact defect recorded as EPD-004 when the kernel landed. Reported as
+      # EPD-006 (domain) and EPD-007 (contexts): the Engineering Plan assigns unit tests to
+      # these issues and no issue owns extending the runner that executes them.
+      #
+      # `contexts` will keep gaining packages through E5–E11. It is named as a root rather
+      # than per-context so that a new context's tests run the day they are written, instead
+      # of on the day someone remembers this file.
+      - name: Unit tests beside their code
+        run: pytest kernel domain contexts -q -rs
+
+  # Integration tests cross a real boundary, and some of them assert on repository refs
+  # rather than on files. Without this job they would never execute — the same gap that left
+  # the unit tests unrun until the kernel landed. Reported as EPD-005; no issue in the
+  # Engineering Plan assigns an integration job, while nine issues declare integration tests.
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth 0 and fetch-tags: the v1 recovery tag is a repository ref, and the
+      # default shallow checkout fetches neither history nor tags. A suite that skipped when
+      # the tag was missing would report green in exactly the situation the tag exists to
+      # prevent, so it must be present rather than optional.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # jsonschema added by M2/E4/#12: its conformance test validates the hand-written
+      # domain types against the normative contracts (ADR-0019), which cannot be done
+      # without a validator. The test skips rather than fails if the library is absent, so
+      # omitting this would have turned a cross-component check into a silent skip.
+      # astropy + numpy added by M3/E5/#17 for the same reason as the unit job; jsonschema
+      # was added by #12 to validate the domain against the normative contracts.
+      - run: pip install pytest jsonschema numpy astropy
+
+      - name: Integration tests
+        run: pytest tests/integration -q -rs

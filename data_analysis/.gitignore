@@ -1,0 +1,157 @@
+# ==================================================
+# AdityaNet — .gitignore
+# ==================================================
+
+# ----- Python cache -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ----- Virtual environments -----
+venv/
+.venv/
+env/
+ENV/
+
+# ----- Environment / secrets -----
+.env
+.env.*
+!.env.example
+
+# ----- Large datasets -----
+*.parquet
+*.csv
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.fits
+*.fits.gz
+*.nc
+*.pi
+*.pkl
+*.pickle
+
+# ----- Raw archives (instrument downloads, backups) -----
+# NOTE: found via direct audit — 2,127 .zip files (20.9GB) of raw Aditya-L1
+# instrument downloads under data_pipeline/downloads/ and .gz files of
+# compressed telemetry under data/ were NOT covered by extension rules
+# above and were being staged into .git. This section closes that gap.
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.7z
+*.rar
+*.bz2
+
+# ----- Model checkpoints / weights -----
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.h5weights
+
+# ----- TensorBoard / experiment tracking -----
+runs/
+tensorboard/
+mlruns/
+wandb/
+
+# ----- Logs -----
+*.log
+logs/
+
+# ----- macOS -----
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+
+# ----- IDE / editor -----
+.vscode/
+.idea/
+*.swp
+*.swo
+.ipynb_checkpoints/
+
+# ----- Build outputs -----
+dist/
+# ANCHORED to the repository root. An unanchored `build/` matches ANY directory named
+# "build" at any depth, and it silently swallowed two directories of committed SOURCE:
+#   web/src/pages/build/            the Build surface and its /build/reproduce page
+#   web/src/generated/data/build/   JSON the site imports at build time
+# Every local build kept working because those files existed on disk, while a clean
+# checkout could not build at all. The only nested "build" directory that genuinely needs
+# ignoring is web/dist/build, and `dist/` above already covers it.
+/build/
+*.egg-info/
+site/
+
+# ----- Temporary / cache directories -----
+tmp/
+temp/
+cache/
+.cache/
+*.tmp
+
+# ----- Node (in case any tooling adds it) -----
+node_modules/
+
+# ----- Project-specific: external/local-only references -----
+# 'brain' is a symlink to a local Gemini CLI data store outside this
+# repository (~/.gemini/antigravity-cli/brain/...). It is not required
+# for build/train/eval/dev and is not portable across machines.
+/brain
+
+# Claude Code's own local session/tool config — not project source.
+.claude/
+
+# Databases / local state
+*.sqlite3
+*.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS-generated archives created accidentally
+*.zip.part
+
+# ----- Reproducible research-audit output -----
+# artifacts/aditya_l1/ contains 95 generated audit/validation JSON reports
+# (verified via direct usage audit: all are written by scratch/*.py or
+# scripts/aditya_l1/*.py, derived from master_feature_table.parquet, and
+# referenced by NOTHING in app/, data_pipeline/, or the training entry
+# points scripts/train_patchtst.py / train_baseline.py). Fully reproducible
+# by re-running the corresponding script. Kept on disk, removed from Git
+# via `git rm --cached` — see REPOSITORY_HEALTH.md / PRE_GITHUB_CHECKLIST.md.
+artifacts/aditya_l1/
+
+# ----- Version 4 datasets (Sprint 30) -----
+# Parquets exceed GitHub's 100MB file limit and are exactly reproducible from
+# the frozen sources via scripts/sprint30/build_dataset_v4.py; the manifest
+# (committed) pins source and generator hashes for verification.
+artifacts/research_v4/**/*.parquet
+
+# Phase 0.5.1: extracted real ISSDC L1 store (135 GB) — regenerate via
+# scripts/v2/phase05/extract_archive.py from data_pipeline/downloads/raw/
+data/aditya_l1/real_l1_v1/
+
+# M-VII canonical build outputs (regenerable via scripts/v2/phase05/build_canonical.py)
+artifacts/v2/phase05/canonical/
+
+# ----- Repository hygiene -----
+# These entered the tree once and made it unreadable: 187 files of throwaway analysis
+# under scratch/, run logs at the root, and generated "certificate"/status reports from
+# tooling. The repository should contain the product, the science, and the record of how
+# they were built — nothing that is merely evidence that a task once ran.
+scratch/
+*.log
+*_CERTIFICATE.md
+REPOSITORY_HEALTH.md
+BUILD_INFO.md

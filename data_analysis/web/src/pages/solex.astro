@@ -1,0 +1,352 @@
+---
+/**
+ * SoLEXS nowcast + forecast — a downstream analysis of 11 days of Aditya-L1 SoLEXS data.
+ *
+ * Applies this platform's protocol (causal features, chronological split, event-level
+ * metrics, day-block bootstrap, mandatory persistence and threshold baselines) to the
+ * public SoLEXS Level-1 zips for 20-31 Mar 2025.
+ *
+ * Every number is read from generated/data/solex/solex.json, written by
+ * solex_analysis/export_dashboard.py from solex_analysis/results/. This is NOT part of the
+ * frozen AdityaNet_v2_dataset_r1 and is not covered by the `pnpm budget` integrity gate.
+ *
+ * Zero JavaScript: all charts are static SVG computed at build time.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import PageHeader from "@/components/shell/PageHeader.astro";
+import PageContract from "@/components/shell/PageContract.astro";
+import Section from "@/components/shell/Section.astro";
+import solex from "@/generated/data/solex/solex.json";
+
+const { meta, lightcurve: lc, events, daily, test_strip: ts, results, first_run: first } = solex;
+interface ModelRow {
+  roc_auc: number;
+  roc_auc_ci95: number[];
+  pr_auc: number;
+  tss: number;
+  n_events: number;
+  events_detected: number;
+  alert_runs: number;
+  false_alert_runs: number;
+}
+const nowcast = results.NOWCAST.models as unknown as Record<string, ModelRow>;
+const forecast = results.FORECAST.models as unknown as Record<string, ModelRow>;
+const quietOnly = (results.FORECAST.models as unknown as { _quiet_only_auc: Record<string, number> })._quiet_only_auc;
+const firstRun = first as unknown as Record<string, { models: Record<string, { roc_auc: number }> }>;
+
+const fmt = (v: number | null | undefined, d = 3): string =>
+  typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
+
+// ── generic static line chart ──────────────────────────────────────────────
+const W = 900;
+const px = { l: 48, r: 12, t: 12, b: 28 };
+const iw = W - px.l - px.r;
+
+function line(ys: readonly number[], lo: number, hi: number, h: number): string {
+  const ih = h - px.t - px.b;
+  return ys
+    .map((y, i) => {
+      const x = px.l + (i / (ys.length - 1)) * iw;
+      const yy = px.t + (1 - (y - lo) / (hi - lo)) * ih;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${yy.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+/** Shaded spans where a 0/1 flag is set. */
+function spans(flag: readonly number[]): { x: number; w: number }[] {
+  const out: { x: number; w: number }[] = [];
+  const n = flag.length;
+  let s = -1;
+  for (let i = 0; i <= n; i++) {
+    const on = i < n && flag[i] === 1;
+    if (on && s < 0) s = i;
+    if (!on && s >= 0) {
+      const x0 = px.l + (s / (n - 1)) * iw;
+      const x1 = px.l + ((i - 1) / (n - 1)) * iw;
+      out.push({ x: x0, w: Math.max(x1 - x0, 1.2) });
+      s = -1;
+    }
+  }
+  return out;
+}
+
+const xOf = (i: number, n: number): number => px.l + (i / (n - 1)) * iw;
+
+// Light curve: all 11 days.
+const LH = 280;
+const lcLo = 0.6;
+const lcHi = 4;
+const lcPath = line(lc.log10_rate, lcLo, lcHi, LH);
+const lcSpans = spans(lc.flare);
+const lcTicks = [1, 2, 3, 4];
+const yLc = (v: number): number => px.t + (1 - (v - lcLo) / (lcHi - lcLo)) * (LH - px.t - px.b);
+
+// Test-period strips.
+const SH = 170;
+const tsRate = line(ts.log10_rate, lcLo, lcHi, SH);
+const tsFlare = spans(ts.flare);
+const tsPre = spans(ts.pre_onset);
+const nowPath = line(ts.nowcast_score, 0, 1, SH);
+const fcPath = line(ts.forecast_score, 0, 1, SH);
+const yS = (v: number): number => px.t + (1 - v) * (SH - px.t - px.b);
+
+const ORDER = ["ENSEMBLE", "logistic", "gradient_boosting", "random_forest", "threshold_rate", "persistence"];
+const LABEL: Record<string, string> = {
+  ENSEMBLE: "Ensemble (3 models)",
+  logistic: "Logistic regression",
+  gradient_boosting: "Gradient boosting",
+  random_forest: "Random forest",
+  threshold_rate: "Threshold on count rate",
+  persistence: "Persistence",
+};
+const REF = new Set(["threshold_rate", "persistence"]);
+const testEvents = events.filter((e) => e.split === "test");
+---
+
+<BaseLayout
+  title="SoLEXS nowcast & forecast — AdityaNet"
+  description="Nowcasting and forecasting solar flares from 11 days of Aditya-L1 SoLEXS data, using the AdityaNet evaluation protocol."
+>
+  <main id="main" class="mx-auto max-w-5xl px-6 pb-32">
+    <div class="section-tight flow">
+      <PageHeader
+        eyebrow="Analysis · SoLEXS 20–31 Mar 2025"
+        title="Flare nowcast and forecast on real SoLEXS data"
+        lede={`${meta.days} days of Aditya-L1 SoLEXS Level-1 data, ${meta.events} flares labelled from the signal itself, scored under this platform's protocol. Nowcasting works; forecasting does not — and the page says so.`}
+      />
+    </div>
+
+    <PageContract
+      what="A nowcast (is a flare happening now?) and a 30-minute forecast (will one start soon?) trained and tested on 11 days of SoLEXS count rates."
+      trust="Features use only past data. Splits are chronological, tuning used the training days only, and the test days were scored once. Persistence and a count-rate threshold are always shown alongside the models."
+      verify={[
+        { href: "/validation/", label: "The platform's validation evidence", note: "GOES-labelled, 171 days" },
+        { href: "/findings/method/", label: "Evaluation protocol", note: "artifacts/v2/ml/EVALUATION_PROTOCOL.md" },
+        { href: "/models/", label: "Model cards", note: "the same detector families" },
+      ]}
+    />
+
+    <Section id="caveats" eyebrow="Read this first" title="What this analysis is, and is not">
+      <ul class="max-w-measure list-disc space-y-3 pl-5 text-sm leading-relaxed text-fg-muted">
+        <li>
+          <span class="text-fg">Self-derived labels.</span> There is no external flare list for these days, so “flare”
+          means a SoLEXS enhancement found by a non-causal detector (centred background, {meta.label_sigma} robust σ,
+          4σ threshold). Nowcast scores measure agreement with that detector, not with GOES classes, and are not
+          comparable to the GOES-labelled numbers elsewhere on this site.
+        </li>
+        <li>
+          <span class="text-fg">Tiny sample.</span> {meta.train_days} training days, {meta.test_days} test days,
+          {meta.test_events} test flares. Differences between models are within the bootstrap intervals.
+        </li>
+        <li>
+          <span class="text-fg">No flux classes.</span> No response matrix is available, so counts are not converted
+          to A/B/C/M/X.
+        </li>
+        <li><span class="text-fg">Not part of the frozen dataset</span> and not covered by the build-time integrity gate.</li>
+      </ul>
+    </Section>
+
+    <Section id="data" eyebrow="The data" title="Eleven days of count rate" ruled>
+      <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          [
+            ["Observation days", String(meta.days), `${meta.range[0]} → ${meta.range[1]} (21 Mar absent)`],
+            ["Minutes", meta.minutes.toLocaleString("en-US"), "1-min mean of 1 s SDD2 counts"],
+            ["Labelled flares", String(meta.events), `${meta.test_events} in the test days`],
+            ["Features", `${meta.features.base} → ${meta.features["base+spectral"]}`, "base → with spectral bands"],
+          ].map(([k, v, n]) => (
+            <div class="glass p-5">
+              <dt class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">{k}</dt>
+              <dd class="mt-3 font-mono text-lg text-fg" data-numeric>{v}</dd>
+              <dd class="mt-2 text-sm leading-relaxed text-fg-muted">{n}</dd>
+            </div>
+          ))
+        }
+      </dl>
+
+      <figure class="glass mt-8 p-5">
+        <figcaption class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">
+          SoLEXS counts/s (log) · red = labelled flare · dashed = day boundary
+        </figcaption>
+        <svg viewBox={`0 0 ${W} ${LH}`} class="mt-4 block w-full" role="img" aria-label="SoLEXS light curve for 11 days with labelled flares shaded">
+          {lcTicks.map((t) => (
+            <g>
+              <line x1={px.l} x2={W - px.r} y1={yLc(t)} y2={yLc(t)} stroke="currentColor" stroke-opacity="0.12" />
+              <text x={px.l - 6} y={yLc(t) + 4} text-anchor="end" font-size="11" fill="currentColor" fill-opacity="0.6">{`10^${t}`}</text>
+            </g>
+          ))}
+          {lcSpans.map((s) => <rect x={s.x} y={px.t} width={s.w} height={LH - px.t - px.b} fill="#e5484d" fill-opacity="0.28" />)}
+          {lc.day_starts.map((d, i) => (
+            <g>
+              <line x1={xOf(d, lc.log10_rate.length)} x2={xOf(d, lc.log10_rate.length)} y1={px.t} y2={LH - px.b} stroke="currentColor" stroke-opacity="0.25" stroke-dasharray="3 4" />
+              <text x={xOf(d, lc.log10_rate.length) + 3} y={LH - 10} font-size="10" fill="currentColor" fill-opacity="0.6">{lc.days[i]!.slice(8)}</text>
+            </g>
+          ))}
+          <path d={lcPath} fill="none" stroke="currentColor" stroke-width="0.8" />
+        </svg>
+      </figure>
+
+      <div class="mt-6 overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="font-mono text-2xs tracking-[0.12em] text-fg-subtle uppercase">
+            <tr><th class="py-2 pr-4">Day</th><th class="pr-4">Median cts/s</th><th class="pr-4">Peak cts/s</th><th>Flares</th></tr>
+          </thead>
+          <tbody>
+            {
+              daily.map((d) => (
+                <tr class="border-t border-line-subtle">
+                  <td class="py-2 pr-4 font-mono">{d.date}</td>
+                  <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(d.median, 1)}</td>
+                  <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(d.max, 0)}</td>
+                  <td class="font-mono tabular-nums" data-numeric>{d.flares}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </Section>
+
+    <Section id="nowcast" eyebrow="Task 1 · detection" title="Nowcast: is a flare in progress?" major ruled>
+      <p class="lede max-w-measure">
+        Works. The learned models reach ROC-AUC about 0.98, but persistence — “it was flaring a minute ago” — is nearly as
+        good, so the real gain is fewer false alerts, not better ranking.
+      </p>
+      <div class="mt-8 overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="font-mono text-2xs tracking-[0.12em] text-fg-subtle uppercase">
+            <tr>
+              <th class="py-2 pr-4">Model</th><th class="pr-4">ROC-AUC (95% CI)</th><th class="pr-4">PR-AUC</th><th class="pr-4">TSS</th>
+              <th class="pr-4">Flares found</th><th>False alert runs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              ORDER.map((k) => {
+                const m = nowcast[k]!;
+                return (
+                  <tr class="border-t border-line-subtle">
+                    <td class="py-2 pr-4 text-fg">{LABEL[k]}{REF.has(k) && <span class="ml-2 font-mono text-2xs text-fg-subtle">reference</span>}</td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(m.roc_auc)} <span class="text-fg-subtle">({fmt(m.roc_auc_ci95[0], 2)}–{fmt(m.roc_auc_ci95[1], 2)})</span></td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(m.pr_auc)}</td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(m.tss, 2)}</td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{m.events_detected}/{m.n_events}</td>
+                    <td class="font-mono tabular-nums" data-numeric>{m.false_alert_runs}/{m.alert_runs}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+    </Section>
+
+    <Section id="forecast" eyebrow="Task 2 · prediction" title={`Forecast: will a flare start in ${meta.horizon_min} minutes?`} major ruled>
+      <p class="lede max-w-measure">
+        Does not work. Every trained model scores near a coin flip, and the plain count-rate threshold is better than all of
+        them. With roughly 26 flare onsets in the training days, the data cannot support a learned forecast.
+      </p>
+      <div class="mt-8 overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="font-mono text-2xs tracking-[0.12em] text-fg-subtle uppercase">
+            <tr>
+              <th class="py-2 pr-4">Model</th><th class="pr-4">ROC-AUC (95% CI)</th><th class="pr-4">PR-AUC</th><th class="pr-4">TSS</th>
+              <th class="pr-4">Onsets warned</th><th class="pr-4">False alert runs</th><th>Quiet-only AUC</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              ORDER.map((k) => {
+                const m = forecast[k]!;
+                const q = quietOnly[k];
+                return (
+                  <tr class="border-t border-line-subtle">
+                    <td class="py-2 pr-4 text-fg">{LABEL[k]}{REF.has(k) && <span class="ml-2 font-mono text-2xs text-fg-subtle">reference</span>}</td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(m.roc_auc)} <span class="text-fg-subtle">({fmt(m.roc_auc_ci95[0], 2)}–{fmt(m.roc_auc_ci95[1], 2)})</span></td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(m.pr_auc)}</td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(m.tss, 2)}</td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{m.events_detected}/{m.n_events}</td>
+                    <td class="pr-4 font-mono tabular-nums" data-numeric>{m.false_alert_runs}/{m.alert_runs}</td>
+                    <td class="font-mono tabular-nums" data-numeric>{fmt(q)}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-6 max-w-measure text-sm leading-relaxed text-fg-muted">
+        <span class="text-fg">Quiet-only AUC</span> removes minutes when a flare is already in progress. Skill that survives
+        there would be genuine precursor signal; here it stays at or below the plain threshold. Richer spectral features did not help:
+        the first run (base features) scored forecast ROC-AUC of {fmt(firstRun.FORECAST!.models.random_forest!.roc_auc, 2)} (random forest) and {fmt(firstRun.FORECAST!.models.gradient_boosting!.roc_auc, 2)} (gradient boosting), against {fmt(forecast.random_forest!.roc_auc, 2)} and {fmt(forecast.gradient_boosting!.roc_auc, 2)} with them.
+      </p>
+    </Section>
+
+    <Section id="test-period" eyebrow="Held-out days" title="27–31 March, scored once" ruled>
+      <figure class="glass p-5">
+        <figcaption class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Count rate (log) · red = labelled flare</figcaption>
+        <svg viewBox={`0 0 ${W} ${SH}`} class="mt-3 block w-full" role="img" aria-label="Test-period light curve with flares shaded">
+          {tsFlare.map((s) => <rect x={s.x} y={px.t} width={s.w} height={SH - px.t - px.b} fill="#e5484d" fill-opacity="0.28" />)}
+          {ts.day_starts.map((d, i) => (
+            <g>
+              <line x1={xOf(d, ts.log10_rate.length)} x2={xOf(d, ts.log10_rate.length)} y1={px.t} y2={SH - px.b} stroke="currentColor" stroke-opacity="0.25" stroke-dasharray="3 4" />
+              <text x={xOf(d, ts.log10_rate.length) + 3} y={SH - 10} font-size="10" fill="currentColor" fill-opacity="0.6">{ts.days[i]!.slice(8)} Mar</text>
+            </g>
+          ))}
+          <path d={tsRate} fill="none" stroke="currentColor" stroke-width="0.8" />
+        </svg>
+      </figure>
+
+      <figure class="glass mt-4 p-5">
+        <figcaption class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Nowcast · ensemble score · dashed = alert threshold</figcaption>
+        <svg viewBox={`0 0 ${W} ${SH}`} class="mt-3 block w-full" role="img" aria-label="Nowcast ensemble score over the test days">
+          {tsFlare.map((s) => <rect x={s.x} y={px.t} width={s.w} height={SH - px.t - px.b} fill="#e5484d" fill-opacity="0.2" />)}
+          <line x1={px.l} x2={W - px.r} y1={yS(ts.nowcast_threshold)} y2={yS(ts.nowcast_threshold)} stroke="currentColor" stroke-dasharray="4 4" stroke-opacity="0.6" />
+          <path d={nowPath} fill="none" stroke="#3b82f6" stroke-width="1" />
+          <text x={px.l - 6} y={yS(1) + 4} text-anchor="end" font-size="11" fill="currentColor" fill-opacity="0.6">1</text>
+          <text x={px.l - 6} y={yS(0) + 4} text-anchor="end" font-size="11" fill="currentColor" fill-opacity="0.6">0</text>
+        </svg>
+      </figure>
+
+      <figure class="glass mt-4 p-5">
+        <figcaption class="font-mono text-2xs tracking-[0.16em] text-fg-subtle uppercase">Forecast · ensemble score · green = true 30-min pre-onset window</figcaption>
+        <svg viewBox={`0 0 ${W} ${SH}`} class="mt-3 block w-full" role="img" aria-label="Forecast ensemble score over the test days">
+          {tsPre.map((s) => <rect x={s.x} y={px.t} width={s.w} height={SH - px.t - px.b} fill="#30a46c" fill-opacity="0.3" />)}
+          <line x1={px.l} x2={W - px.r} y1={yS(ts.forecast_threshold)} y2={yS(ts.forecast_threshold)} stroke="currentColor" stroke-dasharray="4 4" stroke-opacity="0.6" />
+          <path d={fcPath} fill="none" stroke="#f59e0b" stroke-width="1" />
+          <text x={px.l - 6} y={yS(1) + 4} text-anchor="end" font-size="11" fill="currentColor" fill-opacity="0.6">1</text>
+          <text x={px.l - 6} y={yS(0) + 4} text-anchor="end" font-size="11" fill="currentColor" fill-opacity="0.6">0</text>
+        </svg>
+        <p class="mt-3 text-sm leading-relaxed text-fg-muted">
+          The forecast score does not rise ahead of the green windows more than it does elsewhere — the visual form of the table above.
+        </p>
+      </figure>
+    </Section>
+
+    <Section id="catalogue" eyebrow="Catalogue" title={`${events.length} labelled flares`} ruled>
+      <div class="max-h-[28rem] overflow-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="sticky top-0 bg-bg font-mono text-2xs tracking-[0.12em] text-fg-subtle uppercase">
+            <tr><th class="py-2 pr-4">Start (UTC)</th><th class="pr-4">Peak</th><th class="pr-4">End</th><th class="pr-4">Minutes</th><th class="pr-4">Peak cts/s</th><th>Split</th></tr>
+          </thead>
+          <tbody>
+            {
+              events.map((e) => (
+                <tr class="border-t border-line-subtle">
+                  <td class="py-1.5 pr-4 font-mono">{e.start}</td>
+                  <td class="pr-4 font-mono">{e.peak}</td>
+                  <td class="pr-4 font-mono">{e.end}</td>
+                  <td class="pr-4 font-mono tabular-nums" data-numeric>{e.minutes}</td>
+                  <td class="pr-4 font-mono tabular-nums" data-numeric>{fmt(e.peak_rate, 0)}</td>
+                  <td class="font-mono text-fg-subtle">{e.split}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-4 text-sm text-fg-muted">{testEvents.length} of these fall in the held-out test days.</p>
+    </Section>
+  </main>
+</BaseLayout>
